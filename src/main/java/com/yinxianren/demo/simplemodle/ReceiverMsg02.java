@@ -1,5 +1,6 @@
 package com.yinxianren.demo.simplemodle;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import javax.jms.Connection;
@@ -7,14 +8,17 @@ import javax.jms.ConnectionFactory;
 import javax.jms.DeliveryMode;
 import javax.jms.Destination;
 import javax.jms.JMSException;
+import javax.jms.Message;
 import javax.jms.MessageConsumer;
+import javax.jms.MessageListener;
 import javax.jms.MessageProducer;
+import javax.jms.ObjectMessage;
 import javax.jms.Session;
 import javax.jms.TextMessage;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
 
-public class ReceiverMsg {
+public class ReceiverMsg02 {
 
 	private static final String DEFAULT_USER="guest";
 	private static final String DEFAULT_PASSWORD="guest";
@@ -29,11 +33,11 @@ public class ReceiverMsg {
 	private Destination destination= null; 
 	// MessageProducer：消息发送者
 	private MessageConsumer consumer= null; 
-	// TextMessage message;
+
 	private	TextMessage message = null; 
 
 
-	private ReceiverMsg init() {
+	private ReceiverMsg02 init() {
 
 		// 构造ConnectionFactory实例对象，此处采用ActiveMq的实现jar
 		connectionFactory = new ActiveMQConnectionFactory(DEFAULT_USER,DEFAULT_PASSWORD, "tcp://192.168.43.238:61616");
@@ -43,34 +47,53 @@ public class ReceiverMsg {
 			connection = connectionFactory.createConnection();
 			// 启动
 			connection.start();
-			// 获取操作连接
-			session = connection.createSession(Boolean.TRUE,Session.AUTO_ACKNOWLEDGE);
+			// 获取操作连接   CLIENT_ACKNOWLEDGE手动处理模式
+			session = connection.createSession(false,Session.CLIENT_ACKNOWLEDGE);
 			// 获取session注意参数值xingbo.xu-queue是一个服务器的queue，须在在ActiveMq的console配置
 			destination = session.createQueue("demo-first");
 			consumer = session.createConsumer(destination);
-			int i = 0;
-			while (true) {
-				//receive()方法是一个主动获取消息的方法，执行一次，拉取一个消息，测试中使用，开放中少用
-				message= (TextMessage) consumer.receive();
-				if (null != message) {
-					i++;
-					System.out.println("我是接收者====>>>>收到消息" + i +":"+ message.getText());
-				} else {
-					break;
-				}
-				
+			//设置监听器，注册成功后，队列中的消息变化会自动触发监听器的代码，接受消息并处理
+			/*
+			 * 监听器一旦注册，永久有效
+			 * 永久--comsumer线程不关闭
+			 * 处理消息的方式：只要有消息未处理，自动调用onMessage方法，处理消息
+			 * 监听器可以注册若干个，注册多个监听器，相当于集群
+			 * activemq自动循环调用多个监听器，处理队列中的消息，实现并行处理；
+			 * @param msg :未处理的消息
+			 */
+
+//			consumer.setMessageListener(new MessageListener() {
+//				@Override
+//				public void onMessage(Message msg) {
+//					try {
+//						//却方法，代表consumenr已经收到消息，确定后，mq删除对应的消息
+//						msg.acknowledge();
+//						message=(TextMessage)msg;
+//						System.out.println("接受者接受到："+message.getText());
+//					} catch (JMSException e) {
+//						e.printStackTrace();
+//					}
+//					
+//				}
+//			});
+//			
+			consumer.setMessageListener((msg)->{
 				try {
-					TimeUnit.SECONDS.sleep(3);
-				} catch (InterruptedException e) {
+					//却方法，代表consumenr已经收到消息，确定后，mq删除对应的消息
+					msg.acknowledge();
+					message=(TextMessage)msg;
+					System.out.println("接受者接受到："+message.getText());
+				} catch (JMSException e) {
 					e.printStackTrace();
 				}
-				
-				
-			}
-
+			});
+			//阻塞当前代码，保证listener代码未结束，如果代码结束，监听器自动关闭
+			System.in.read();
 
 		} catch (JMSException e) {
 			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}catch (IOException e) {
 			e.printStackTrace();
 		}finally {
 			try {
@@ -85,7 +108,7 @@ public class ReceiverMsg {
 
 	public static void main(String[] args) {
 
-    new ReceiverMsg().init();
+		new ReceiverMsg02().init();
 
 	}
 
